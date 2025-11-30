@@ -1,6 +1,7 @@
 import streamlit as st
 import pickle
 import numpy as np
+import os
 
 # --- 1. DEPENDENCY CHECK ---
 try:
@@ -68,6 +69,13 @@ st.markdown("""
         transform: scale(1.02);
         box-shadow: 0 6px 15px rgba(212, 175, 55, 0.5);
     }
+    
+    /* INPUT FIELD */
+    .stTextInput > div > div > input {
+        border-radius: 50px;
+        padding-left: 20px;
+        border: 1px solid #d4af37;
+    }
 </style>
 """, unsafe_allow_html=True)
 
@@ -84,12 +92,17 @@ except FileNotFoundError:
 col_left, col_image, col_right = st.columns([1, 2, 1])
 
 with col_image:
-    # Direct reliable link to the image
-    st.image(
-        "https://upload.wikimedia.org/wikipedia/commons/a/a1/Archangel_Gabriel_by_Francesco_Botticini.jpg",
-        caption="Archangel Gabriel - Guardian of the Message",
-        use_container_width=True
-    )
+    # HYBRID LOADING STRATEGY
+    if os.path.exists("angel.jpg"):
+        # Priority 1: Local Image (Fastest & Safest)
+        st.image("angel.jpg", caption="Guardian of the Network", use_container_width=True)
+    else:
+        # Priority 2: Reliable Backup from Unsplash (If you haven't downloaded angel.jpg yet)
+        st.image(
+            "https://images.unsplash.com/photo-1542259681-d41907cb3874?q=80&w=600&auto=format&fit=crop",
+            caption="Archangel Gabriel - Guardian of the Message",
+            use_container_width=True
+        )
 
 # --- 6. TITLE & INTRO ---
 st.markdown("<h1>Gabriel AI</h1>", unsafe_allow_html=True)
