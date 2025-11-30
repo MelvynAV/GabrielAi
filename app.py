@@ -147,7 +147,7 @@ st.markdown(
     unsafe_allow_html=True
 )
 st.markdown(
-    "<p style='text-align: center; color: #cc0000;'>This AI engine analyzes URL structures to detect phishing threats in real-time.</p>", 
+    "<p style='text-align: center; color: #FFF;'>This AI engine analyzes URL structures to detect phishing threats in real-time.</p>", 
     unsafe_allow_html=True
 )
 st.markdown("---")
