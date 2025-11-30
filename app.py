@@ -7,6 +7,7 @@ import os
 try:
     from feature_extraction import extract_features
 except ImportError:
+    # This assumes 'feature_extraction.py' is a local script required by the application
     st.error("❌ Critical Error: 'feature_extraction.py' not found. Please ensure it is in the same directory.")
     st.stop()
 
@@ -76,6 +77,43 @@ st.markdown("""
         padding-left: 20px;
         border: 1px solid #d4af37;
     }
+
+    /* ------------------------------------- */
+    /* UPDATED FULL-WIDTH BANNER EFFECT CSS (SMALLER SIZE, NO CROPPING) */
+    
+    /* 1. Target the immediate parent of the stImage container to apply full width */
+    /* This is often a generic 'st-emotion-xyz' div */
+    .st-emotion-cache-12fm5qf {
+        width: 100vw !important;
+        position: relative !important;
+        margin-left: calc(-50vw + 50%) !important;
+        overflow: hidden !important;
+    }
+
+    /* 2. Target the image element's container to ensure full viewport width */
+    [data-testid="stImage"] {
+        /* Ensures the container is the full width of the screen */
+        width: 100vw !important;
+        position: relative !important;
+        /* The margin adjustment is moved to the parent container above for robustness */
+        overflow: hidden; 
+        background: transparent !important;
+    }
+
+    /* 3. Target the <img> tag inside the Streamlit image component to control height and centering */
+    [data-testid="stImage"] img {
+        /* Reduced max-height to 250px for smaller banner */
+        max-height: 250px !important; 
+        /* Ensure it takes full available width of the 100vw container */
+        width: 100% !important; 
+        /* IMPORTANT: Use 'contain' to ensure the entire image is visible (no cropping) */
+        object-fit: contain !important; 
+        /* Explicitly center the image content within the frame */
+        object-position: center center !important;
+        /* Removing rounded corners for an edge-to-edge effect */
+        border-radius: 0; 
+    }
+    /* ------------------------------------- */
 </style>
 """, unsafe_allow_html=True)
 
@@ -88,21 +126,19 @@ except FileNotFoundError:
     st.stop()
 
 # --- 5. VISUAL HEADER (ARCHANGEL GABRIEL) ---
-# Using columns to center the image perfectly
-col_left, col_image, col_right = st.columns([1, 2, 1])
-
-with col_image:
-    # HYBRID LOADING STRATEGY
-    if os.path.exists("angel.jpg"):
-        # Priority 1: Local Image (Fastest & Safest)
-        st.image("angel.jpg", caption="Guardian of the Network", use_container_width=True)
-    else:
-        # Priority 2: Reliable Backup from Unsplash (If you haven't downloaded angel.jpg yet)
-        st.image(
-            "https://images.unsplash.com/photo-1542259681-d41907cb3874?q=80&w=600&auto=format&fit=crop",
-            caption="Archangel Gabriel - Guardian of the Message",
-            use_container_width=True
-        )
+# Removed columns to allow the CSS to force the image to full page width.
+# HYBRID LOADING STRATEGY
+if os.path.exists("angel3.jpg"):
+    # Priority 1: Local Image (Fastest & Safest)
+    # CSS defined in Section 3 enforces the full-width banner aspect ratio here.
+    st.image("angel3.jpg", caption="Guardian of the Network", use_container_width=True)
+else:
+    # Priority 2: Reliable Backup from Unsplash (Updated to match the new 250px height)
+    st.image(
+        "https://images.unsplash.com/photo-1542259681-d41907cb3874?q=80&w=1200&h=250&auto=format&fit=crop",
+        caption="Archangel Gabriel - Guardian of the Message",
+        use_container_width=True
+    )
 
 # --- 6. TITLE & INTRO ---
 st.markdown("<h1>Gabriel AI</h1>", unsafe_allow_html=True)
@@ -111,7 +147,7 @@ st.markdown(
     unsafe_allow_html=True
 )
 st.markdown(
-    "<p style='text-align: center; color: #666;'>This AI engine analyzes URL structures to detect phishing threats in real-time.</p>", 
+    "<p style='text-align: center; color: #cc0000;'>This AI engine analyzes URL structures to detect phishing threats in real-time.</p>", 
     unsafe_allow_html=True
 )
 st.markdown("---")
