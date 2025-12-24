@@ -1,68 +1,74 @@
 # feature_extraction.py
-
 import re
-from urllib.parse import urlparse
+from urllib.parse import urlparse, urlsplit
 
-# --- 1. IP Address Detection ---
-def has_ip_address(url):
-    # CYBER LOGIC: Legitimate sites have domain names (e.g., google.com).
-    # If a URL uses an IP address (e.g., http://123.45.67.89/...), it is suspicious.
-    # Attackers do this to bypass DNS filters or because the domain was banned.
-    match = re.search(
-        r'(([01]?\d\d?|2[0-4]\d|25[0-5])\.([01]?\d\d?|2[0-4]\d|25[0-5])\.([01]?\d\d?|2[0-4]\d|25[0-5])\.([01]?\d\d?|2[0-4]\d|25[0-5])\/)|'  # IPv4
-        r'((0x[0-9a-fA-F]{1,2})\.(0x[0-9a-fA-F]{1,2})\.(0x[0-9a-fA-F]{1,2})\.(0x[0-9a-fA-F]{1,2})\/)' # Hexadecimal
-        r'(?:[a-fA-F0-9]{1,4}:){7}[a-fA-F0-9]{1,4}', url) # IPv6
-    return 1 if match else 0
-
-# --- 2. URL Length ---
-def get_url_length(url):
-    # CYBER LOGIC: Phishing URLs are often very long to hide the suspicious part
-    # on mobile devices or to obfuscate the real destination.
-    return len(url)
-
-# --- 3. URL Depth ---
-def get_depth(url):
-    # CYBER LOGIC: Counts the number of '/' after the domain.
-    # e.g., .com/folder/sub-folder/file/login.php
-    # Compromised sites often hide phishing kits deep inside the file structure
-    # to avoid detection by the site admin.
-    s = urlparse(url).path.split('/')
-    depth = 0
-    for j in range(len(s)):
-        if len(s[j]) != 0:
-            depth = depth+1
-    return depth
-
-# --- 4. The '@' Symbol ---
-def count_at_symbol(url):
-    # CYBER LOGIC: Everything before an '@' in a URL is ignored by the browser 
-    # and considered a user ID.
-    # e.g., http://google.com@evil-site.com -> The browser goes to evil-site.com.
-    # This is an old trick, but it still exists.
-    return url.count('@')
-
-# --- 5. Number of Dots (.) ---
-def count_dots(url):
-    # CYBER LOGIC: A high number of dots can indicate infinite subdomains.
-    # e.g., www.paypal.com.secure.login.account-update.com
-    # The attacker tries to drown the real domain (account-update.com) with trusted words.
-    return url.count('.')
-
-# --- 6. HTTPS ---
-def has_https(url):
-    # Note: Today, 80% of phishing sites also use HTTPS (green padlock).
-    # However, it remains a feature that the AI can use in combination with others.
-    return 1 if "https" in url else 0
-
-# --- MAIN FUNCTION ---
-def extract_features(url):
+def extract_features(url: str) -> list:
+    """
+    Extract 17 features matching your training dataset.
+    Returns list of 16 numerical values + domain (but domain not used for prediction).
+    """
     features = []
-    # We stack the results into a list
-    features.append(has_ip_address(url))
-    features.append(get_url_length(url))
-    features.append(get_depth(url))
-    features.append(count_at_symbol(url))
-    features.append(count_dots(url))
-    features.append(has_https(url))
-    
+
+    # Normalize
+    if not url.startswith(('http://', 'https://')):
+        url = 'http://' + url
+
+    parsed = urlparse(url)
+    scheme = parsed.scheme.lower()
+    netloc = parsed.netloc.lower()
+    path = parsed.path.lower()
+    query = parsed.query.lower()
+    full = url.lower()
+
+    hostname = netloc.split(':')[0].replace('www.', '')
+
+    # 1. Have_IP
+    features.append(1 if re.search(r'\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}', hostname) else 0)
+
+    # 2. Have_At
+    features.append(1 if '@' in full else 0)
+
+    # 3. URL_Length
+    features.append(len(url))
+
+    # 4. URL_Depth (number of subdirectories)
+    features.append(len([p for p in path.split('/') if p]))
+
+    # 5. Redirection (double slash in path or many redirects – simplified)
+    features.append(1 if '//' in path[1:] or '//' in query else 0)
+
+    # 6. https_Domain (1 = https, 0 = http)
+    features.append(1 if scheme == 'https' else 0)
+
+    # 7. TinyURL (shortener domains)
+    shorteners = ['bit.ly', 'goo.gl', 'tinyurl.com', 't.co', 'is.gd']
+    features.append(1 if any(s in hostname for s in shorteners) else 0)
+
+    # 8. Prefix/Suffix (hyphen in domain)
+    features.append(1 if '-' in hostname else 0)
+
+    # 9. DNS_Record (always assume 1 for simplicity; real check needs DNS lib)
+    features.append(1)  # placeholder - set to 0 if you detect no DNS later
+
+    # 10. Web_Traffic (placeholder: high for known domains, low otherwise)
+    features.append(1)  # assume good traffic; improve with Alexa-like list if needed
+
+    # 11. Domain_Age (placeholder: assume old)
+    features.append(1)  # 1 = old domain
+
+    # 12. Domain_End (placeholder)
+    features.append(0)  # 0 = not expiring soon
+
+    # 13. iFrame (check for iframe src in page – but since no page fetch, assume 0)
+    features.append(0)
+
+    # 14. Mouse_Over (event handler – assume 0 without page)
+    features.append(0)
+
+    # 15. Right_Click (disable right-click – assume 0)
+    features.append(0)
+
+    # 16. Web_Forwards (meta refresh or many redirects – simplified)
+    features.append(0)
+
     return features

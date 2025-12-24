@@ -1,98 +1,91 @@
-# train_model.py (Version 3 - Blindée)
-
+# train_model.py
 import pandas as pd
 import numpy as np
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.model_selection import train_test_split
-from sklearn.metrics import accuracy_score, classification_report
 import pickle
-import requests
-import io
-from feature_extraction import extract_features 
+import sys
 
-# --- FONCTION DE SECOURS (Si internet plante) ---
-def get_backup_data():
-    print("⚠️ Utilisation du Dataset de SECOURS (Interne)...")
-    data = {
-        'url': [
-            'http://google.com', 'https://www.youtube.com', 'https://github.com', 'https://uottawa.ca', 'https://stackoverflow.com',
-            'http://192.168.1.1/login', 'http://paypal-secure-account-login.com', 'http://apple-id-verify.cf', 'http://secure-bank.com.update.info', 'http://netflix-payment-declined.net'
-        ],
-        'label': ['good', 'good', 'good', 'good', 'good', 'bad', 'bad', 'bad', 'bad', 'bad']
-    }
-    return pd.DataFrame(data)
+LOCAL_CSV = "phishing_site_urls.csv"
 
-# --- ÉTAPE 1 : ACQUISITION DES DONNÉES ---
-print("📥 Tentative de téléchargement du dataset...")
+def train():
+    print("📥 Loading Pre-extracted Phishing Dataset...")
+    print(f"File: {LOCAL_CSV}\n")
 
-# Lien très stable (bitsofgray)
-url_dataset = "https://raw.githubusercontent.com/bitsofgray/phishing-data/master/phishing_data.csv"
-
-try:
-    response = requests.get(url_dataset)
-    if response.status_code == 200:
-        data = pd.read_csv(io.StringIO(response.content.decode('utf-8')))
-        print("✅ Téléchargement réussi !")
-    else:
-        print(f"❌ Erreur lien (Status {response.status_code}).")
-        data = get_backup_data()
-except Exception as e:
-    print(f"❌ Erreur connexion : {e}")
-    data = get_backup_data()
-
-# --- NETTOYAGE ---
-# On s'assure que les colonnes sont propres
-data.columns = data.columns.str.strip().str.lower()
-
-# Si le téléchargement a marché mais qu'on a beaucoup de données, on échantillonne pour aller vite
-if len(data) > 2000:
-    data_phishing = data[data['label'] == 'bad'].sample(500)
-    data_legit = data[data['label'] == 'good'].sample(500)
-    data_sample = pd.concat([data_phishing, data_legit]).reset_index(drop=True)
-else:
-    data_sample = data
-
-print(f"📊 Dataset prêt : {len(data_sample)} URLs à analyser.")
-
-# --- ÉTAPE 2 : TRANSFORMATION ---
-print("🧠 Extraction des caractéristiques via GabrielAI...")
-features = []
-labels = []
-
-for index, row in data_sample.iterrows():
     try:
-        url_features = extract_features(row['url'])
-        features.append(url_features)
-        # 1 pour 'bad', 0 pour 'good'
-        labels.append(1 if row['label'] == 'bad' else 0)
-    except:
-        continue
+        data = pd.read_csv(LOCAL_CSV)
+        data.columns = [c.strip().lower() for c in data.columns]
+        print(f"✅ Loaded {len(data):,} samples | {len(data.columns)} columns")
+        print("Columns:", list(data.columns), "\n")
 
-if not features:
-    print("❌ Erreur : Aucune feature extraite. Vérifie feature_extraction.py")
-    exit()
+        label_col = 'label'
+        if label_col not in data.columns:
+            label_col = data.columns[-1]
+        print(f"Label column: '{label_col}' (values: {sorted(data[label_col].unique())})\n")
 
-# --- ÉTAPE 3 : ENTRAÎNEMENT ---
-print("🔥 Entraînement du modèle RandomForest...")
-X = np.array(features)
-y = np.array(labels)
+        # IMPORTANT: Exclude non-numeric / string columns like 'domain'
+        exclude_cols = [label_col, 'domain']  # add any other string columns if more appear
+        feature_cols = [c for c in data.columns if c not in exclude_cols]
 
-X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
+        print(f"Using {len(feature_cols)} numeric features: {feature_cols}\n")
 
-model = RandomForestClassifier(n_estimators=100, max_depth=10)
-model.fit(X_train, y_train)
+        X = data[feature_cols].copy()
 
-# --- ÉTAPE 4 : RÉSULTATS ---
-predictions = model.predict(X_test)
-# Si le dataset est trop petit (mode secours), l'accuracy peut être bizarre, c'est normal.
-if len(y_test) > 0:
-    accuracy = accuracy_score(y_test, predictions)
-    print(f"\n✅ TERMINÉ ! Précision du modèle : {accuracy * 100:.2f}%")
-else:
-    print("\n✅ TERMINÉ ! (Pas assez de données pour le test, mais le modèle est créé)")
+        # Convert to numeric, coerce errors to NaN
+        X = X.apply(pd.to_numeric, errors='coerce')
 
-# --- ÉTAPE 5 : SAUVEGARDE ---
-with open('gabriel_model.pkl', 'wb') as file:
-    pickle.dump(model, file)
+        # Handle missing/invalid values (common: -1 = missing)
+        X = X.replace(-1, np.nan)
+        X = X.fillna(X.median(numeric_only=True))  # median imputation
 
-print("💾 Modèle sauvegardé sous 'gabriel_model.pkl'")
+        # Final check: ensure all numeric
+        if not np.all(np.isfinite(X)):
+            print("Warning: Non-finite values remain in X. Cleaning...")
+            X = X[np.isfinite(X).all(axis=1)]
+
+        y = data[label_col]
+
+        # Standardize label: assume 0=legitimate, 1=phishing (adjust if reversed)
+        # If labels are -1/1, map -1 → 1 (phish), 1 → 0 (legit)
+        if y.min() < 0:
+            y = np.where(y == -1, 1, 0)
+
+        X_train, X_test, y_train, y_test = train_test_split(
+            X, y, test_size=0.2, random_state=42, stratify=y
+        )
+
+        print(f"Training set: {len(X_train):,} samples")
+        print(f"Test set:     {len(X_test):,} samples\n")
+
+        print("🔥 Training Random Forest...")
+        model = RandomForestClassifier(
+            n_estimators=500,
+            max_depth=20,
+            random_state=42,
+            n_jobs=-1
+        )
+        model.fit(X_train, y_train)
+
+        train_acc = model.score(X_train, y_train)
+        test_acc  = model.score(X_test, y_test)
+
+        print("\n" + "═" * 60)
+        print(f"  Gabriel AI - Training Complete")
+        print(f"  Training Accuracy: {train_acc*100:.2f}%")
+        print(f"  Test Accuracy:     {test_acc*100:.2f}%")
+        print("═" * 60 + "\n")
+
+        with open('gabriel_phishing_model.pkl', 'wb') as f:
+            pickle.dump(model, f)
+
+        print("💾 Model saved as gabriel_phishing_model.pkl")
+        print("Note: For inference in app.py, you need to extract the same 17 features from new URLs.")
+
+    except Exception as e:
+        print(f"❌ Error: {type(e).__name__}: {e}")
+        import traceback
+        traceback.print_exc(file=sys.stdout)
+
+
+if __name__ == "__main__":
+    train()
